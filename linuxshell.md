@@ -1327,3 +1327,1074 @@ read -s 例如输入密码的时候
 
 ## 理解输入输出
 
+### 标准文件描述符
+
+linux用文件描述符来标识每个文件对象。
+
+| 文件描述符 | 缩写   | 描述     |
+| ---------- | ------ | -------- |
+| 0          | STDIN  | 标准输入 |
+| 1          | STDOUT | 标准输出 |
+| 2          | STDERR | 标准错误 |
+
+#### STDIN
+
+STDIN文件描述符代表shell的标准输入。对终端界面来说，标准输入是键盘。shell从STDIN文件描述符对应的键盘获得输入，在用户输入时处理每个字符。
+在使用输入重定向符号（<）时，Linux会用重定向指定的文件来替换标准输入文件描述符。它会读取文件并提取数据，就如同它是键盘上键入的。
+
+#### STDOUT
+
+shell对于错误消息的处理是跟普通输出分开的。如果出现错误信息，这些信息是不会出现在日志文件中
+
+#### STDERR
+
+STDERR文件描述符代表shell的标准错误输出。
+
+### 重定向错误
+
+#### 只重定向错误
+
+```shell
+$ ls -al badfile 2> test4 
+```
+
+将STDERR文件描述符值放在重定向符号前。该值必须紧紧地放在重定向符号前
+
+#### 重定向错误和数据
+
+```shell
+$ ls -al test test2 test3 badtest 2> test6 1> test7 
+```
+
+也可以将STDERR和STDOUT的输出重定向到同一个输出文件。为此bash shell提供了特殊的重定向符号&>
+
+## 在脚本中重定向输出
+
+### 临时重定向
+
+```
+echo "This is an error message" >&2 #重定向到STDERR
+```
+
+默认STDERR会导向STDOUT。
+
+### 永久重定向
+
+用exec命令告诉shell在脚本执行期间重定向某个特定文件描述符。
+
+```shell
+exec 1>testout #将STDOUT重定向到文件testout
+```
+
+一旦重定向了STDOUT或STDERR，就很难再将它们重定向回原来的位置。
+
+一旦重定向了STDOUT或STDERR，就很难再将它们重定向回原来的位置。
+
+## 在脚本中重定向输入
+
+```shell
+exec 0< testfile #将STDIN重定向到文件中，程序将从文件获取输入
+```
+
+## 创建自己的重定向
+
+在shell中最多可以有9个打开的文件描述符。
+
+### 创建输出问价描述符
+
+```shell
+$ cat test13
+#!/bin/bash
+# using an alternative file descriptor
+exec 3>test13out
+echo "This should display on the monitor"
+echo "and this should be stored in the file" >&3
+echo "Then this should be back on the monitor" 
+```
+
+也可以追加到现有文件
+
+```shell
+exec 3>>test13out
+```
+
+### 重定向问价描述符
+
+```shell
+$ cat test14
+#!/bin/bash
+# storing STDOUT, then coming back to it
+exec 3>&1
+exec 1>test14out
+echo "This should store in the output file"
+echo "along with this line."
+exec 1>&3
+echo "Now things should be back to normal"
+$
+$ ./test14
+Now things should be back to normal
+$ cat test14out
+This should store in the output file
+along with this line.
+$
+```
+
+可以将一个文件描述符重定向到标准输出，然后重定向标准输出到一个文件，也可以将标准输出重定向到之前的文件描述符。
+
+这是一种在脚本中临时重定向输出，然后回复默认输出设置的常用方法。
+
+### 创建输入文件描述符
+
+在重定向到文件之前，先将STDIN文件描述符保存到另外一个文件描述符，然后在读取完文件之后再将STDIN恢复到它原来的位置。
+
+### 创建读写文件描述符
+
+可以打开单个文件描述符和输出，用同一个文件描述符对同一个文件进行读写。
+
+是对同一个文件进行数据读写，shell会维护一个内部指针，指明在文件中的当前位置。任何读或写都会从文件指针上次的位置开始。
+
+```shell
+$ cat test16
+#!/bin/bash
+# testing input/output file descriptor
+exec 3<> testfile
+read line <&3
+echo "Read: $line"
+echo "This is a test line" >&3
+$ cat testfile
+This is the first line.
+This is the second line.
+This is the third line.
+$ ./test16
+Read: This is the first line.
+$ cat testfile
+This is the first line.
+This is a test line
+ine.
+This is the third line.
+$ 
+```
+
+### 关闭文件描述符
+
+要关闭文件描述符，将它重定向到特殊符号&-。
+
+```shell
+exec 3>&-
+```
+
+shell会在脚本退出时自动关闭。
+
+再关闭文件描述符时还需要注意另一件事，如果随后你在脚本中打开了同一个输出文件，shell会用一个新文件来替换已有文件。
+
+## 列出打开的文件描述符
+
+```
+/usr/bin/lsof
+```
+
+- -p指定进程ID
+- -d指定文件描述符编号
+- $$当前PID
+- -a对其他两个选项进行AND运算。
+
+```shell
+$ /usr/sbin/lsof -a -p $$ -d 0,1,2
+COMMAND PID USER FD TYPE DEVICE SIZE NODE NAME
+bash 3344 rich 0u CHR 136,0 2 /dev/pts/0
+bash 3344 rich 1u CHR 136,0 2 /dev/pts/0
+bash 3344 rich 2u CHR 136,0 2 /dev/pts/0 
+```
+
+## 阻止命令输出
+
+将文件描述符重定向到一个叫作null文件的特殊文件
+
+也可以用来快速清除现有文件中的数据。
+
+```shell
+$ cat testfile
+This is the first line.
+This is the second line.
+This is the third line.
+$ cat /dev/null > testfile
+$ cat testfile
+$
+```
+
+## 创建临时文件
+
+mktemp命令可以在/tmp目录中创建一个唯一的临时
+文件。
+
+它会将文件的读和写权限分配给文件的属主，并将你设成文件的属主。一旦创建了文件，你就在脚本中有了完整的读写权限，但其他人没法访问它（当然，root用户除外）。
+
+### 创建本地临时文件
+
+要用mktemp命令在本地目录中创建一个临时文件，你只要指定一个文件名模板就行了。模板可以包含任意文本文件名，在文件名末尾加上6个X就行了。mktemp命令会用6个字符码替换这6个X，从而保证文件名在目录中是唯一的。
+
+```shell
+$ mktemp testing.XXXXXX 
+```
+
+### 在/tmp目录中创建临时文件
+
+-t选项会强制mktemp命令来在系统的临时目录来创建该文件。返回用来创建临时文件的全路径。
+
+### 创建临时目录
+
+-d选项告诉mktemp命令来创建一个临时目录而不是临时文件。
+
+```shell
+$ mktemp -d dir.XXXXXX
+```
+
+## 记录消息
+
+将输出同时发送到显示器和日志文件。可用tee命令。
+
+tee命令相当于管道的一个T型接头。它将从STDIN过来的数据同时发往两处。一处是STDOUT，另一处是tee命令行所指定的文件名：
+
+```shell
+tee filename
+```
+
+默认情况下，tee命令会在每次使用时覆盖输出文件内容。追加用-a。
+
+## 实例
+
+它读取.csv格式的数据文件，输出SQL INSERT语句来将数据插入数据库
+
+```shell
+$cat test23
+#!/bin/bash
+# read file and create INSERT statements for MySQL
+outfile='members.sql'
+IFS=','
+while read lname fname address city state zip
+do
+ cat >> $outfile << EOF
+ INSERT INTO members (lname,fname,address,city,state,zip) VALUES
+('$lname', '$fname', '$address', '$city', '$state', '$zip');
+EOF
+done < ${1} #读取第一个命令行参数
+$
+```
+
+# 控制脚本
+
+## 处理信号
+
+### linux信号
+
+默认情况下，bash shell会忽略收到的任何SIGQUIT (3)和SIGTERM (5)信号（正因为这样，交互式shell才不会被意外终止）。
+
+通过SIGINT信号，可以中断shell。Linux内核会停止为shell分配CPU处理时间。这种情况发生时，shell会将SIGINT信号传给所有由它所启动的进程，
+
+### 生成信号
+
+1.终端进程
+
+Ctrl+C会生成SIGINT（终止进程）信号。
+
+2.暂停进程
+
+Ctrl+Z组合键会生成一个SIGTSTP信号，停止shell中运行的任何进程。
+
+停止进程会让程序继续保留在内存中，并能从上次停止的位置继续运行。
+
+用ps -l命令查看进程的时候。
+
+在S列中（进程状态），ps命令将已停止作业的状态为显示为T。这说明命令要么被跟踪，要么被停止了。
+
+kill命令发送SIGKILL信号终止进程。
+
+### 捕获信号
+
+trap命令，如果脚本收到了trap命令中列出的信号，该信号不再由shell处理，而是交由本地处理。
+
+### 捕获脚本退出
+
+只需要在trap命令后加上EXIT信号就行。
+
+### 修改或移除捕获
+
+要想在脚本中的不同位置进行不同的捕获处理，只需重新使用带有新选项的trap命令。
+
+也可以删除已设置好的捕获。只需要在trap命令与希望恢复默认行为的信号列表之间加上两个破折号就行了。
+
+```shell
+trap -- SIGINT
+```
+
+也可以在trap命令后使用单破折号来恢复信号的默认行为。单破折号和双破折号都可以正常发挥作用。
+
+## 以后台模式运行脚本
+
+### 后台运行脚本
+
+在命令后加个&符号
+
+当后台进程运行时，它仍然会使用终端显示器来显示STDOUT和STDERR消息。
+
+### 运行多个后台作业
+
+每一个后台进程都和终端会话（pts/0）终端联系在一起。如果终端会话退出，那么后台进程也会随之退出。
+
+## 在非控制台下运行脚本
+
+nohup：可以让脚本一直以后台模式运行到结束，即使你退出了终端会话。
+
+nohup命令会自动将STDOUT和STDERR的消息重定向到一个名为nohup.out的文件中。
+
+## 作业控制
+
+作业停止后，可以用kill命令终止该进程，发送SIGCONT信号重启停止的进程。
+
+### 查看作业
+
+| 参  数 | 描  述                                      |
+| ------ | ------------------------------------------- |
+| -l     | 列出进程的PID以及作业号                     |
+| -n     | 只列出上次shell发出的通知后改变了状态的作业 |
+| -p     | 只列出作业的PID                             |
+| -r     | 只列出运行中的作业                          |
+| -s     | 只列出已停止的作业                          |
+
+当前的默认作业完成处理后，带减号的作业成为下一个默认作业。任何时候都只有一个带加号的作业和一个带减号的作业，不管shell中有多少个正在运行的作业。
+
+### 重启停止的作业
+
+可以将已停止的作业作为后台进程或前台进程重启。前台进程会接管你当前工作的终端，所以在使用该功能时要小心了。
+
+以后台模式重启可以用bg命令加上作业号。
+
+以前台模式重启可以用fg命令加上作业号。
+
+## 调整谦让度
+
+linux系统中，由shell启动的所有进程的调度优先级默认都是相同的。
+
+调度优先级是个整数值，从-20（最高优先级）到+19（最低优先级）。默认情况下，bash shell以优先级0来启动所有进程。
+
+### nice命令
+
+-n指定新的优先级级别；（-n并不是必须的）
+
+必须将nice命令和要启动的命令放在同一行中。
+
+普通系统用户不允许提高命令的优先级
+
+### renice命令
+
+改变已经运行命令的优先级。
+
+- 只能对属于你的进程进行renice
+- 只能通过renice降低进程的优先级
+- root用户可以通过renice任意调整进程的优先级
+
+## 定时运行作业
+
+### 用at命令来计划执行作业
+
+at的守护进程atd会以后台模式运行，atd守护进程会检查系统上的一个特殊目录（通常位于/var/spool/at）来获取用at命令提交的作业。默认情况下，atd守护进程会每60秒检查一下这个目录。
+
+#### 1.at命令的格式
+
+```shell
+at [-f filename] time
+```
+
+在你使用at命令时，该作业会被提交到作业队列（job queue）。作业队列会保存通过at命令提交的待处理的作业。针对不同优先级，存在26种不同的作业队列。作业队列通常用小写字母a~z和大写字母A~Z来指代。a的优先级最低。
+
+#### 2.获取作业的输出
+
+Linux系统会将提交该作业的用户的电子邮件地址作为STDOUT和STDERR。任何发到STDOUT或STDERR的输出都会通过邮件系统发送给该用户。
+
+#### 3.列出等待的作业
+
+atq命令
+
+#### 4.删除作业
+
+atrm命令
+
+### 定期执行脚本
+
+#### 1.cron时间表
+
+```shell
+min hour dayofmonth month dayofweek command
+
+00 12 * * * if [`date +%d -d tomorrow` = 01 ] ; then ; command #每个月最后一天
+```
+
+可以用通配符*来指定条目
+
+#### 2.构建cron时间表
+
+ceontab命令
+
+-e可以添加条目
+
+#### 3.浏览cron目录
+
+如果你创建的脚本对精确的执行时间要求不高，用预配置的cron脚本目录会更方便。有4个基本目录：hourly、daily、monthly和weekly。
+
+#### 4.anacron程序
+
+如果anacron知道某个作业错过了执行时间，它会尽快运行该作业。
+
+anacron不会运行位于/etc/cron.hourly的脚本。这是因为anacron程序不会处理执行时间需求小于一天的脚本。
+
+### 使用新shell启动脚本
+
+.bashrc文件通常也是通过某个bash启动文件来运行的。因为.bashrc文件会运行两次：一次是当你登入bash shell时，另一次是当你启动一个bash shell时。
+
+
+
+# 创建函数
+
+## 基本的脚本函数
+
+### 创建函数
+
+```shell
+function name {
+	commands
+}
+
+name () {
+	COMMANDS
+}
+```
+
+### 使用函数
+
+如果在函数被定义前使用函数，你会收到一条错误消息。
+
+## 返回值
+
+返回退出状态码
+
+### 默认退出状态码
+
+函数的退出状态码是函数中最后一条命令返回的退出状态码。在函数执行结束后，可以用标准变量$?来确定函数的退出状态码。
+
+### 使用return命令
+
+- 函数一结束就返回值
+- 退出状态码必须时0~255
+
+### 使用函数输出
+
+保存到变量中；
+
+```shell
+function dbl {    
+	read -p "Enter a value: " value    
+	echo $[ $value * 2 ] #可返回赋值到变量中
+}
+```
+
+## 在函数中使用变量
+
+### 向函数传递参数
+
+函数名会在$0变量中定义，函数命令行上的任何参数都会通过$1、$2等定义。也可以用特殊变量$#来判断传给函数的参数数目。
+
+在脚本中指定函数时，必须将参数和函数放在同一行。
+
+由于函数使用特殊参数环境变量作为自己的参数值，因此它无法直接获取脚本在命令行中的参数值。
+
+```shell
+$ cat test7 #!/bin/bash 
+# trying to access script parameters inside a function 
+function func7 {
+	echo $[ $1 * $2 ] 
+} 
+if [ $# -eq 2 ] 
+then
+	value=$(func7 $1 $2)    
+	echo "The result is $value" 
+else
+	echo "Usage: badtest1 a b" 
+fi 
+$  
+$ ./test7 
+Usage: badtest1 a b 
+$ ./test7 10 15 
+The result is 150
+```
+
+### 在函数中处理变量
+
+- 全局变量
+- 局部变量
+
+#### 全局变量
+
+全局变量是在shell脚本中任何地方都有效的变量。如果你在脚本的主体部分定义了一个全局变量，那么可以在函数内读取它的值。类似地，如果你在函数内定义了一个全局变量，可以在脚本的主体部分读取它的值。
+
+#### 局部变量
+
+无需在函数中使用全局变量，函数内部使用的任何变量都可以被声明成局部变量。要实现这一点，只要在变量声明的前面加上local关键字就可以了。
+
+## 数组变量和函数
+
+### 向函数传递数组参数
+
+必须将数组变量的值分解成单个的值，然后将这些值作为函数参数使用。在函数内部，可以将所有的参数重新组合成一个新的变量。
+
+```shell
+function addarray {
+	local sum=0
+	local newarray
+	newarray=($(echo "$@")) #分解数组单个值，重新组合成新的变量
+	for value in ${newarray[*]}
+	do
+		sum=$[ $sum + $value ] 
+	done
+	echo $sum
+}
+```
+
+### 从函数返回数组
+
+从函数里向shell脚本传回数组变量也用类似的方法。函数用echo语句来按正确顺序输出单个数组值，然后脚本再将它们重新放进一个新的数组变量中。
+
+## 函数递归
+
+```shell
+function factorial {
+	if [ $1 -eq 1 ]
+	then
+		echo 1
+	else
+		local temp=$[ $1 - 1 ]
+		local result='factorial $temp' 
+		echo $[ $result * $1 ]
+	fi
+}
+```
+
+## 创建库
+
+bash shell允许创建函数库文件。
+
+使用函数库的关键在于source命令。source命令会在当前shell上下文中执行命令，而不是创建一个新shell。可以用source命令来在shell脚本中运行库文件脚本。这样脚本就可以使用库中的函数了。
+
+source命令有个快捷的别名，称作点操作符（dot  operator）。要在shell脚本中运行myfuncs库文件，只需添加下面这行：
+
+```shell
+. ./myfuncs
+```
+
+## 在命令行上使用函数
+
+### 在命令行上创建函数
+
+- 单行方式定义函数，每个命令之后接分号。
+- 多行方式定义函数，提示符提示输入更多的命令
+
+在命令行上创建函数时要特别小心。如果你给函数起了个跟内建命令或另一个命令相同的名字，函数将会覆盖原来的命令。
+
+### 在.bashrc文件中定义函数
+
+- 直接定义函数
+- 读取函数文件 用source命令将库文件中的函数添加到.bashrc中。
+
+## 实例
+
+### 下载及安装
+
+### 构件库
+
+```shell
+.configure
+make
+make test
+make install
+```
+
+### shtool库函数
+
+```
+shtool [options] [function [options] [args]]
+```
+
+### 使用库
+
+# 图形化桌面环境中的脚本编程
+
+## 创建文本菜单
+
+### 创建菜单布局
+
+创建菜单前要用clear命令清空显示器上的已有内容。然后用echo命令显示菜单元素。
+
+最后用read命令读取用户输入。
+
+### 创建菜单函数
+
+为没有实现的函数先创建一个桩函数。针对每个case创建一个函数。
+
+### 添加菜单逻辑
+
+case命令实现，将菜单布局和函数结合起来。
+
+### 整合shell脚本菜单
+
+将以上各个部分组合起来。使用while循环来一直打开菜单。
+
+### 使用select命令
+
+select命令只需要一条命令就可以创建出菜单，然后获取输入的答案并自动处理。
+
+```shell
+select variable in list 
+do
+	case commands
+done
+```
+
+select语句中的所有内容必须作为一行出现。
+
+## 制作窗口
+
+### dialog包
+
+dialog命令使用命令行参数来决定生成哪种窗口部件（widget）。
+
+```shell
+dialog --widget parameters #parameters定义了部件窗口的大小以及部件需要的文本
+```
+
+每个dialog部件都提供两种形式的输出
+
+- STDERR，部件返回数据，将STDERR输出重定向到另一个文件或文件描述符中。
+- 使用退出状态码，确定用户选择的按钮
+
+#### msgbox部件
+
+```shell
+dialog --msgbox text height width
+```
+
+#### yesno部件
+
+dialog命令的退出状态码会根据用户选择的按钮来设置
+
+#### inputbox部件
+
+```shell
+dialog --inputbox "Enter your age:" 10 20 2>age.txt
+```
+
+#### textbox部件
+
+#### menu部件
+
+```shell
+$ dialog --menu "Sys Admin Menu" 20 30 10 1 "Display disk space" 2 "Display users" 3 "Display memory usage" 4 "Exit" 2> test.txt
+```
+
+#### fselect部件
+
+```shell
+$ dialog --title "Select a file" --fselect $HOME/ 10 50 2>file.txt
+```
+
+### dialog选项
+
+config部件外观和配置。
+
+--backtitle选项是为脚本中的菜单创建公共标题的简便办法。
+
+### 在脚本中使用dialog命令
+
+## 使用图形
+
+### kde环境
+
+kdialog命令
+
+```shell
+kdialog display-options window-options arguments 
+```
+
+kdialog窗口部件用STDOUT来输出值，而不是STDERR。
+
+### GNOME环境
+
+- gdialog
+- zenity
+
+#### zenity
+
+输出也是STDOUT
+
+# 初始sed和gawk
+
+## 文本处理
+
+### sed编辑器
+
+流编辑器
+
+- 一次从输入值读取一行数据
+- 根据所提供的编辑器命令匹配数据
+- 按照命令修改流中的数据
+- 将新的数据输入到STDOUT
+
+```shell
+sed options script file	
+```
+
+s命令，替换字符串
+
+sed编辑器并不会修改文本文件的数据。它只会将修改后的数据发送到STDOUT。
+
+使用多个编辑命令使用-e选项，命令之间用分号隔开。也可以用次提示符来分隔命令（‘）
+
+从文件中读取编辑器命令： -f选项指定文件
+
+### gawk程序
+
+能提供一个类编程环境来修改和重新组织文件中的数据。
+
+- 定义变量来保存数据
+- 使用算术和字符串操作符来处理数据
+- 使用结构化的编程概念（比如if-then语句和循环）来为数据处理增加处理逻辑
+- 通过提取数据文件中的数据元素，将其重新排列或格式化，生产格式化报告。
+
+```shell
+gawk options program file
+```
+
+gawk程序用一对花括号来定义。
+
+```shell
+$ gawk '{print "Hello World!"}'
+```
+
+Ctrl+D组合键会在bash中产生一个EOF字符。这个组合键能够终止该gawk程序并返回到命令行界面提示符下。
+
+- $0代表整个文本行
+- $1代表文本行中的第一个数据字段
+- $2代表文本行中的第二个数据字段
+- $n代表文本行中的第n个数据字段
+
+每个数据字段通过字段分隔符划分。
+
+| 选  项       | 描  述                             |
+| ------------ | ---------------------------------- |
+| -F fs        | 指定行中划分数据字段的字段分隔符   |
+| -f file      | 从指定的文件中读取程序             |
+| -v var=value | 定义gawk程序中的一个变量及其默认值 |
+| -mf N        | 指定要处理的数据文件中的最大字段数 |
+| -mr N        | 指定数据文件中的最大数据行数       |
+| -W keyword   | 指定gawk的兼容模式或警告等级       |
+
+在多个命令之间放置分号。
+
+注意，gawk程序在引用变量值时并未像shell脚本一样使用美元符。
+
+在处理数据前处理脚本，比如为报告创建标题，BEGIN关键字针对这种情况。
+
+在处理数据后运行脚本，用END
+
+## sed编辑器基础
+
+### 更多的替换选项
+
+- 替换标记 要让替换命令能够替换一行中不同地方出现的文本必须使用替换标记（substitution flag）。替换标记会在替换命令字符串之后设置。
+  - 数字，表明新文本将替换第几处模式匹配的地方
+  - g，表明新文本将会替换所有匹配的文本
+  - p，表明原先行的内容要打印处理 和-n同时使用打印匹配的行
+  - w file，将替换结果写道文件中
+- 替换字符 替换/字符是需要转义，或者使用其他字符来作为替换命令中的字符串分隔符。
+
+### 使用地址
+
+- 以数字形式表示行区间 行号从1开始
+- 用文本模式来过滤出行：指定文本模式滤除命令要作用的行
+
+```shell
+[address] command
+
+address {
+	command1
+	command2
+	command3
+}#将地址的多个命令分组
+
+/pattern/command #文本模式过滤，支持正则表达式
+```
+
+$表示最后一行
+
+可以用花括号将多条命令组合在一起，作用在同一行上。
+
+### 删除行
+
+命令d，删除匹配指定寻址模式的所有行，支持寻址模式和文本过滤模式。
+
+可以使用两个文本模式来删除某个区间内的行，sed编辑器会删除两个指定行之间的所有行（包括指定的行）。
+
+如果第一个匹配，第二个不匹配，会把匹配之后的所有行删除。
+
+### 插入和附加文本
+
+- 插入命令（i）会在指定行之前增加一个新行
+- 附加命令（a）会在指定行之后增加一个新行
+
+```shell
+sed '[address] command \
+new line'
+```
+
+可以在用这些命令时只指定一个行地址。可以匹配一个数字行号或文本模式，但不能用地址区间。
+
+### 修改行
+
+命令c，可以在用这些命令时只指定一个行地址。可以匹配一个数字行号或文本模式，使用区间会替换区间内的所有文本。
+
+### 转换命令（transform）
+
+```shell
+[address]y/inchars/outchars
+```
+
+如果inchars和outchars的长度不同，则sed编辑器会产生一条错误消息。
+
+转换命令是一个全局命令，也就是说，它会文本行中找到的所有指定字符自动进行转换，而不会考虑它们出现的位置。
+
+### 回顾打印
+
+- p命令用来打印文本行
+
+  - ```shell
+    sed -n '/number 3/p' data.txt #打印修改行
+    sed -n '2,3p' data.txt #打印2，3行
+    
+    $ sed -n '/3/{ 
+    > p 
+    > s/line/test/p 
+    > }' data6.txt #打印修改前后的行
+    ```
+
+- 等号（=）命令用来打印行号：打印当前行号。
+
+  - ```shell
+    $ sed -n '/number 4/{ 
+    > = 
+    > p 
+    > }' data6.txt 4 This is line number 4. 
+    ```
+
+- l命令用来列出行（list）：打印数据流中的文本和不可打印的ASCII字符。任何不可打印字符要么在其八进制值前加一个反斜线，要么使用标准C风格的命名法。
+
+### 使用sed处理文件
+
+- 写入文件。
+
+  ```shell
+  [address]w filename
+  
+  sed -n '/Browncoat/w Browncoats.txt' data11.txt 
+  ```
+
+- 从文件读取数据
+
+  ```shell
+  [address]r filename #将读取的文件插入到指定地址后
+  
+  sed '3r data12.txt' data6.txt
+  ```
+
+  读取命令的另一个很酷的用法是和删除命令配合使用：利用另一个文件中的数据来替换文件中的占位文本。
+
+# 正则表达式
+
+## 定义
+
+正则表达式是你所定义的模式模板（pattern temple），可以用它来过滤文本。
+
+## 类型
+
+不同应用程序会用不同类型的正则表达式。包括编程语言，linux使用工具，以及主流应用（mysql，postgresql）
+
+正则表达式是通过**正则表达式引擎**（负责解释正则表达式模式，使用模式进行文本匹配）实现的。
+
+两种流行的正则表达式引擎
+
+- POSIX基础正则表达式（basic regular expression，BRE）引擎
+- POSIX扩展正则表达式（extended regular expression，ERE）引擎
+
+## 定义BRE模式
+
+### 纯文本
+
+```shell
+$ echo "This is a test" | sed -n '/this/p'　#区分大小写
+```
+
+### 特殊字符
+
+```shell
+.*[]^${}\+?|()
+```
+
+文本中使用这些字符需要转义
+
+/（正斜线）也需要转义
+
+### 锚字符
+
+默认情况下，当指定一个正则表达式模式时，只要模式出现在数据流中的任何地方，它就能匹配。有两个特殊字符可以用来将模式锁定在数据流中的行首或行尾。
+
+- 锁定在行首（^（脱字符））
+
+  如果你将脱字符放到模式开头之外的其他位置，那么它就跟普通字符一样，不再是特殊字符了。
+
+  如果指定正则表达式模式时只用了脱字符，就不需要用反斜线来转义。但如果你在模式中先指定了脱字符，随后还有其他一些文本，那么你必须在脱字符前用转义字符。
+
+- 锁定在行尾（$）
+
+- 组合锚点
+
+  查找含特定文本的数据行
+
+  将两个锚点直接组合在一起，之间不加任何文本，这样过滤出数据流中的空白行。
+
+### 点号字符
+
+匹配除换行符之外的任意字符。必须匹配一个字符。
+
+### 字符组（character class）
+
+用`[]`定义。
+
+字符组的一个极其常见的用法是解析拼错的单词，比如用户表单输入的数据。
+
+### 排除型字符组
+
+用`[^]`定义
+
+### 区间
+
+指定区间的第一个字符、单破折线以及区间的最后一个字符。
+
+### 特殊的字符组
+
+| 组          | 描  述                                         |
+| ----------- | ---------------------------------------------- |
+| [[:alpha:]] | 匹配任意字母字符，不管是大写还是小写           |
+| [[:alnum:]] | 匹配任意字母数字字符0~9、A~Z或a~z              |
+| [[:blank:]] | 匹配空格或制表符                               |
+| [[:digit:]] | 匹配0~9之间的数字                              |
+| [[:lower:]] | 匹配小写字母字符a~z                            |
+| [[:print:]] | 匹配任意可打印字符                             |
+| [[:punct:]] | 匹配标点符号                                   |
+| [[:space:]] | 匹配任意空白字符：空格、制表符、NL、FF、VT和CR |
+| [[:upper:]] | 匹配任意大写字母字符A~Z                        |
+
+### 星号
+
+在字符后面放置星号表明该字符必须在匹配模式的文本中出现0次或多次。
+
+## 扩展正则表达式
+
+gawk支持ERE，awk不支持
+
+### 问号
+
+问号表明前面的字符可以出现0次或1次
+
+### 加号
+
+加号表明前面的字符可以出现1次或多次，但必须至少出现1次。
+
+### 花括号
+
+ERE中的花括号允许你为可重复的正则表达式指定一个上限。这通常称为间隔（interval）。
+
+两种形式
+
+- m：正则表达式准确出现n次
+- m，n：正则表达式至少出现m次，至多出现n次。
+
+默认情况下，gawk程序不会识别正则表达式间隔。必须指定gawk程序的--re- interval命令行选项才能识别正则表达式间隔。
+
+### 管道符号
+
+管道符号允许你在检查数据流时，用逻辑OR方式指定正则表达式引擎要用的两个或多个模式。
+
+```shell
+expr1|expr2|...
+```
+
+### 表达式分组
+
+正则表达式模式也可以用圆括号进行分组。当你将正则表达式模式分组时，该组会被视为一个标准字符。可以像对普通字符一样给该组使用特殊字符。
+
+## 实战
+
+### 目录文件计数
+
+```powershell
+$ cat countfiles 
+#!/bin/bash
+# count number of files in your PATH 
+mypath=$(echo $PATH | sed 's/:/ /g')
+count=0
+for directory in $mypath
+do    
+	check=$(ls $directory) 
+    for item in $check
+    do 
+    	count=$[ $count + 1 ]
+    done
+    echo "$directory - $count"
+    count=0
+done
+$ ./countfiles
+/usr/local/sbin - 0
+/usr/local/bin - 2 
+/usr/sbin - 213 
+/usr/bin - 1427 
+/sbin - 186 
+/bin - 152 
+/usr/games - 5 
+```
+
+### 验证电话号码
+
+```shell
+(123)456-7890
+(123) 456-7890
+123-456-7890
+123.456.7890
+
+^\(?[2-9][0-9]{2}\)?(| |-|\.)[0-9]{3}( |-|\.)[0-9]{4}$
+```
+
+### 解析邮件地址
+
+```shell
+^([a-zA-Z0-9_\-\.\+]+)@([a-zA-Z0-9_\-\.]+)\.([a-zA-Z]{2,5})$
+```
+
+# sed进阶
+
+## 多行命令
+
+- N：将数据流中的下一行加起来创建一个多行组来处理
+- D：删除多行组中的一行
+- P：打印多行组中的一行
+
+### next命令
+
+
+
