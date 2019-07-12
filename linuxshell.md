@@ -2522,3 +2522,221 @@ $ sed '{
   ```
 
   
+
+
+
+-----------
+
+### 时间函数
+
+| 函数                          | 描述                                                         |
+| ----------------------------- | ------------------------------------------------------------ |
+| mktime(datasoec)              | 将一个按YYYY MM DD HH MM SS [DST]格式指定的日期转换成时间戳值 |
+| strftime(format [,tunestamp]) | 将当前时间的时间戳或timestamp（如果提供了的话）转化格式化日期（采用shell函数date()的格式） |
+| system()                      | 返回当前时间的时间戳                                         |
+
+## 自定义函数
+
+### 定义函数
+
+```sh
+function name([variables])
+{
+	statements
+}
+```
+
+### 使用自定义函数
+
+在定义函数时，它必须出现在多有代码块之前（包括BEGIN代码块）。
+
+### 创建函数库
+
+```sh
+$ cat funclib
+function myprint()
+{
+	printf "%-16s - %s\n", $1, $4 
+} 
+function myrand(limit) 
+{
+	return int(limit * rand())
+} 
+function printthird() 
+{ 
+	print $3 
+} 
+$ cat script4 
+BEGIN{ FS="\n"; RS=""}
+{ 
+myprint()
+}
+$ gawk -f funclib -f script4 data2 #用多个-f参数分别使用函数库和gawk脚本。
+Riley Mullen     - (312)555-1234
+Frank Williams   - (317)555-9876
+Haley Snell      - (313)555-4938
+$
+```
+
+
+
+---
+
+# 使用其他shell
+
+## dash shell
+
+Debian的dash shell，是ash shell的直系后代，ash shell是Unix系统Bourne shell的简化版本。
+
+## dash的特性
+
+### dash的命令行参数
+
+dash shell使用命令行参数来控制其行为。
+
+### dash的环境变量
+
+由于dash的目标是简洁，因此它的环境变量比bash shell少多了。
+
+用set命令显示环境变量。
+
+- 默认环境变量
+- 位置参数
+  - $0：shell的名称。
+  - $n：第n个位置参数。
+  - $*：含有所有参数内容的单个值，由IFS环境变量中的第一个字符分隔；没定义IFS的话，由空格分隔。
+  - $@：将所有的命令行参数展开为多个参数。
+  - $#：位置参数的总数。
+  - $?：最近一个命令的退出状态码。
+  - $-：当前选项标记。
+  - $$：当前shell的进程ID（PID）。
+  - $!：最近一个后台命令的PID。
+- 用户自定义的环境变量 export。dash不支持数组
+
+### dash内建命令
+
+dash内建命令不支持操作命令历史记录或目录栈的命令。
+
+## dash脚本编程
+
+### 创建dash脚本
+
+\#!/bin/dash
+
+### 不能使用的功能
+
+- 算数运算 支持expr operation；$(( operation ))，不支持\$[ operation ]
+
+- test命令
+
+  bash  shell的test命令允许你使用双等号（==）来测试两个字符串是否相等。
+
+  dash shell中的test命令不能识别用作文本比较的==符号，只能识别=符号
+
+- function命令
+
+  dash shell不支持function语句。在dash shell中，你必须用函数名和圆括号定义函数。
+
+## zsh shell
+
+特性 
+
+- 改进的shell选项处理
+- shell的兼容性模式
+- 可加载模块
+
+zsh shell提供了一组核心内建命令，并提供了添加额外命令模块（command module）的能力。每个命令模块都为特定场景提供了另外一组内建命令，比如网络支持和高级数学功能。可以只添加你觉得有用的模块。
+
+## zsh的组成
+
+### shell选项
+
+|参  数|描  述|
+|-----|----|
+|-c |只执行指定的命令，然后退出|
+|-i |作为交互式shell启动，提供一个命令行交互提示符|
+|-s |强制shell从STDIN读取命令|
+|-o |指定命令行选项|
+
+- 更改目录：该选项用于控制cd命令和dirs命令如何处理目录更改。
+- 补全：该选项用于控制命令补全功能。
+- 扩展和扩展匹配：该选项用于控制命令中文件扩展。
+- 历史记录：该选项用于控制命令历史记录。
+- 初始化：该选项用于控制shell在启动时如何处理变量和启动文件。
+- 输入输出：该选项用于控制命令处理。
+- 作业控制：该选项用于控制shell如何处理作业和启动作业。
+- 提示：该选项用于控制shell如何处理命令行提示符。
+- 脚本和函数：该选项用于控制shell如何处理shell脚本和定义函数。
+- shell仿真：该选项允许设置zsh shell来模拟其他类型shell行为。
+- shell状态：该选项用于定义启动哪种shell的选项。
+- zle：该选项用于控制zsh行编辑器功能。
+- 选项别名：可以用作其他选项别名的特殊选项
+
+### 内建命令
+
+- 核心内建命令
+
+- 附加模块
+  
+  | 模块 | 描述 |
+  | ---- | ---- |
+  |zsh/datetime|额外的日期和时间命令及变量|
+  |zsh/files|基本的文件处理命令|
+  |zsh/mapfile|通过关联数组来访问外部文件|
+  |zsh/mathfunc| 额外的科学函数|
+  |zsh/pcre |扩展的正则表达式库|
+  |zsh/net/socket| Unix域套接字支持|
+  |zsh/stat| 访问stat系统调用来提供系统的统计状况|
+  |zsh/system| 访问各种底层系统功能的接口|
+  |zsh/net/tcp| 访问TCP套接字|
+  |zsh/zftp |专用FTP客户端命令|
+  |zsh/zselect |阻塞，直到文件描述符就绪才返回|
+  |zsh/zutil |各种shell实用工具|
+  
+- 查看、添加和删除模块
+
+  zmodload命令
+
+  查看 $zmodload
+
+  添加 $zmodload zsh/zftp
+
+  删除 $zmodload -u zsh/zftp
+
+## zsh脚本编程
+
+### 数学运算
+
+提供对浮点数的全部支持。
+
+- 执行计算
+  - let命令
+  - 双圆括号
+- 数学函数：zsh/mathfunc模块
+
+### 结构化命令
+
+- if-then-else语句
+
+- for循环（包含c语言风格）
+
+- while循环
+
+- until循环
+
+- select语句
+
+- case语句
+
+- repeat语句
+
+  - ```sh
+    repeat param 
+    do
+    	commands
+    done
+    ```
+
+### 函数
+
+支持使用function命令或通用圆括号定义函数名的方式。
