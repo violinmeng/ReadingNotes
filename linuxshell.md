@@ -2398,3 +2398,127 @@ $ ./countfiles
 
 
 
+
+
+### 分支
+
+可以为分支命令定义一个跳转的标签，标签以冒号开始，最多可以是7个标签长度。
+
+```shell
+：label
+```
+
+如果某行匹配了分支模式，  sed编辑器就会跳转到带有分支标签的那行。
+
+### 测试
+
+测试（test）命令（t）也可以用来改变sed编辑器脚本的执行流程。测试命令会根据替换命令的结果跳转到某个标签，而不是根据地址进行跳转。
+
+```shell
+[address]t [label]
+```
+
+测试命令提供了对数据流中的文本执行基本的if-then语句的一个低成本办法。
+
+```shell
+$ echo "This, is, a, test, to, remove, commas. " | sed -n '{
+> :start
+> s/,//1p
+> t start
+> }' 
+This is, a, test, to, remove, commas. 
+This is a, test, to, remove, commas. 
+This is a test, to, remove, commas.
+This is a test to, remove, commas.
+This is a test to remove, commas.
+This is a test to remove commas. #当无需替换时，测试命令不会跳转而是继续执行剩下的脚本。
+```
+
+## 模式替代
+
+在使用通配符时，很难知道到底哪些文本会匹配模式。
+
+### &符号
+
+&符号可以用来代表替换命令中的匹配的模式。
+
+### 替代单独的单词
+
+sed编辑器用圆括号来定义替换模式中的子模式。你可以在替代模式中使用特殊字符来引用每个子模式。替代字符由反斜线和数字组成。数字表明子模式的位置。sed编辑器会给第一个子模式分配字符\1，给第二个子模式分配字符\2，依此类推。
+
+```sh
+$ echo "The System Administrator manual" | sed ' > s/\(System\) Administrator/\1 User/' 
+The System User manual $
+```
+
+
+
+```sh
+$ echo "1234567" | sed '{ 
+> :start > s/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/ 
+> t start > }' 
+1,234,567 
+$
+```
+
+## 在脚本中使用sed
+
+### 使用包装脚本
+
+可以将sed编辑器命令放到shell包装脚本（wrapper）中，不用每次使用时都重新键入整个脚本。
+
+### 重定向sed的输出
+
+可以在脚本中用$()将sed编辑器命令的输出重定向到一个变量中，以备后用。
+
+## 创建sed实用工具
+
+### 加倍行间距
+
+每行之后插入空白行
+
+```sh
+sed 'G' data2.txt #G命令会简单地将保持空间内容附加到模式空间内容后。当启动sed编辑器时，保持空间只有一个空行。将它附加到已有行后面，你就在已有行后面创建了一个空白行。最后一行也有一个空白
+sed '$!G' data2.txt #改进后，最后一行没有空白了。
+```
+
+### 对可能含有空白行的文件夹背行间距
+
+```sh
+$ sed '/^$/d ; $!G' data6.txt #先删除已有空白行
+```
+
+### 给文件中的行编号 
+
+```sh
+$ sed '=' data2.txt | sed 'N; s/\n/ /'#也可以用命令nl
+```
+
+### 打印末尾行
+
+```sh
+$ sed '{
+> :start
+> $q ; N ; 11,$D #q退出命令，判断是不是最后一行 D命令会删除模式空间的第一行
+> b start
+> }' data7.txt 
+```
+
+### 删除行
+
+- 删除连续的空白行
+
+  ```sh
+  sed '/./,/^$/!d' data8.txt #区间是/./到/^$/，其余的空白行都删除
+  ```
+
+- 删除结尾的空白行
+
+  ```sh
+  sed '{ 
+  :start 
+  /^\n*$/{$d; N; b start } 
+  }'
+  ```
+
+  
